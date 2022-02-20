@@ -5,3 +5,4 @@ names==0.3.0
 web3==5.28.0
 loguru==0.6.0
 urllib3==1.26.8
+lxml==4.7.1
