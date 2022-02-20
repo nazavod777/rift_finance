@@ -7,12 +7,12 @@ from web3.auto import w3
 from threading import Thread, Lock, active_count
 from os import system
 from ctypes import windll
-from sys import stderr, exit
+from sys import stderr
 from loguru import logger
 from urllib3 import disable_warnings
 from time import sleep
 from gc import collect
-from msvcrt import getch
+from json import loads
 
 
 disable_warnings()
@@ -24,11 +24,6 @@ print('Telegram Channel - https://t.me/n4z4v0d\n')
 windll.kernel32.SetConsoleTitleW('RiftFinance Auto Reger | by NAZAVOD')
 lock = Lock()
 
-mail_choice = int(input('Take mail type (1 - generate gmail from your mail; 2 - generate random mail; 3 - take mail from txt file): '))
-if mail_choice == 1:
-	user_mail = str(input('Enter your Gmail: '))
-elif mail_choice == 3:
-	mail_folder = str(input('Drop TXT with mails: '))
 threads = int(input('Threads: '))
 use_proxy = str(input('Use Tor proxies? (y/N): '))
 
@@ -37,24 +32,6 @@ def get_tor_proxy():
 	proxy_auth = str(randint(1, 0x7fffffff)) + ':' + str(randint(1, 0x7fffffff))
 	proxies = {'http': 'socks5://{}@localhost:9150'.format(proxy_auth), 'https': 'socks5://{}@localhost:9150'.format(proxy_auth)}
 	return (proxies)
-
-
-def random_mail_from_user(user_mail):
-	randstring = ''.join([choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' if i != 15 else 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for i in range(15)])
-	email = user_mail.split('@')[0]+'+'+randstring+'@'+user_mail.split('@')[1]
-	return (email)
-
-
-def random_mail_absolute():
-	randstring = ''.join([choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' if i != 25 else 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for i in range(25)])
-	email = randstring+choice(['@yandex.ru', '@ya.ru', '@yandex.kz', '@ya.kz', '@yahoo.com', '@gmail.com', '@mail.ru', '@rambler.ru'])
-	return (email)
-
-
-def mail_from_file():
-	with open(mail_folder, 'a') as file:
-		email_massive = [row.strip() for row in file]
-	return (email_massive)
 
 
 def createwallet():
@@ -67,28 +44,21 @@ def createwallet():
 def mainth():
 	while True:
 		try:
-			if mail_choice == 1:
-				email = random_mail_from_user(user_mail)
-			elif mail_choice == 2:
-				email = random_mail_absolute()
-			elif mail_choice == 3:
-				global email_massive
-				if 'email_massive' not in globals():
-					email_massive = mail_from_file()
-				if len(email_massive) < 1:
-					raise Exception('mail_insufficiency')
-				else:
-					lock.acquire()
-					email = email_massive.pop(0)
-					lock.release()
-
 			wallet_data = createwallet()
 			session = Session()
-
 
 			if use_proxy in ('y', 'Y'):
 				session.proxies.update(get_tor_proxy())
 
+
+			mail_session = Session()
+			mail_session.headers.update({'User-Agent': random_useragent(), 'Accept': 'application/json, text/plain, */*', 'Referer': 'https://temprmail.com/'})
+
+			r = mail_session.post('https://api.temprmail.com/v1/emails')
+			email = loads(r.text)['email']
+			checkmailsurl = loads(r.text)['emails_json_url']
+			logger.info(f'Email {email} successfully received')
+			
 
 			session.headers.update({'user-agent': random_useragent(), 'accept': '*/*;q=0.5, text/javascript, application/javascript, application/ecmascript, application/x-ecmascript', 'accept-language': 'ru,en;q=0.9', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8', 'origin': 'https://i.prefinery.com', 'referer': 'https://i.prefinery.com/projects/ansk9w4w/users/instant'})
 			r = session.get('https://i.prefinery.com/projects/ansk9w4w/users/instant')
@@ -100,17 +70,47 @@ def mainth():
 
 			first_name = get_first_name()
 			last_name = get_last_name()
-			data = f'utf8=✓&display=inline&creation_location=&creation_location_title=&referrer=&referral_token=&utm_source=&utm_medium=&utm_campaign=&utm_term=&utm_content=&{request_param}=&{firstname_data}={first_name}&{lastname_data}={last_name}&tester[profile][email]=sdg346b3@ya.ru&{address_data}={wallet_data[0]}&commit=Register+for+the+Whitelist'.encode('utf-8')
+			data = f'utf8=✓&display=inline&creation_location=&creation_location_title=&referrer=&referral_token=&utm_source=&utm_medium=&utm_campaign=&utm_term=&utm_content=&{request_param}=&{firstname_data}={first_name}&{lastname_data}={last_name}&tester[profile][email]={email}&{address_data}={wallet_data[0]}&commit=Register+for+the+Whitelist'.encode('utf-8')
 
 			r = session.post('https://i.prefinery.com/projects/ansk9w4w/users', data=data, headers={'x-csrf-token': csrf})
+
+
 			if 'We have added you to the' not in r.text:
 				raise Exception('wrong_response')
+			else:
+				logger.info(f'Waiting for confirmation by email {email}')
+
+
+			for i in range(13):
+				r = mail_session.get(checkmailsurl)
+				if 'Please Confirm Your Rift Finance Subscription' in r.text:
+					msgid = str(loads(r.text)[0]['hash_id'])
+					r = mail_session.get(f'https://tempremail-assets.s3.us-east-1.amazonaws.com/emails/{msgid}.json')
+					verify_link = r.text.split('By confirming your email address you consent to receive updates from the Rift via email')[-1].split('<a href=\\"')[1].split('\\" target=\\"_blank\\"')[0].replace('\\/', '/')
+					logger.success(f'The code was successfully received for {email}')
+					break
+				else:
+					if i == 12:
+						raise Exception('email_timeout')
+					else:
+						sleep(5)
+
+
+			r = session.get(verify_link)
+
+
+			if 'You have been successfully subscribed.' not in r.text:
+				raise Exception('wrong_response')
+
+
 		except Exception as error:
 			if str(error) == 'mail_insufficiency':
 				logger.success('All emails have been successfully processed')
 				break
 			elif str(error) == 'wrong_response':
 				logger.error(f'Wrong response, code: {str(r.status_code)}')
+			elif str(error) == 'email_timeout':
+				logger.error(f'{email} email timeout')
 			else:
 				logger.error(f'Unexpected error: {str(error)}')
 		else:
@@ -119,20 +119,15 @@ def mainth():
 			logger.success(f'Email {email} successfully registered')
 
 
-	print('\nPress any key to exit...')
-	getch()
-	exit()
-
 def cleaner():
 	while True:
-		sleep(60)
 		clear()
 		collect()
+		sleep(60)
 
 
 if __name__ == '__main__':
-	clear()
-	Thread(target=cleaner).start()
+	Thread(target=cleaner, daemon=True).start()
 	while True:
-		if active_count() <= threads:
+		if active_count()-1 <= threads:
 			Thread(target=mainth).start()
